@@ -1,0 +1,7 @@
+[package]
+name = "canarywatcher"
+version = "0.1.0"
+authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
+
+[dependencies]
+inotify = "0.4"
