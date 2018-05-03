@@ -5,3 +5,7 @@ and when anything touches it, it will lock your luks volume and forcefully, imme
 turn off your computer.
 
 This means that if someone is lurking around your files, they will get locked out.
+
+## DO NOTE: Disable gnome tracker and equivalent tools, or they will trigger it!
+
+Also, you want to run this with setuid or root, or it won't be able to perform its tasks.
