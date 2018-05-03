@@ -1,5 +1,5 @@
 /** 
- * Copyright (c) 2017, Patrick Uiterwijk <patrick@puiterwijk.org>
+ * Copyright (c) 2018, Patrick Uiterwijk <patrick@puiterwijk.org>
  * All rights reserved.
  *
  * This file is part of CanaryWatcher.
