@@ -65,8 +65,7 @@ fn main() {
         Command::new("/usr/sbin/cryptsetup")
                 .arg("luksClose")
                 .arg("luks-f13f0bb2-d2b6-42d3-9b5b-d9f02b8dcb37")
-                .spawn()
-                .expect("Failed to lock");
+                .spawn();
 
         println!("Raising Elephants Is So Utterly Boring");
         match File::create(Path::new("/proc/sysrq-trigger")) {
