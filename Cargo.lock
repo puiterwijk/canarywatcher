@@ -5,7 +5,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "canarywatcher"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "inotify 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
