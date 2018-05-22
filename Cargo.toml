@@ -6,4 +6,4 @@ description = "Lock your system when canary directory is touched"
 license = "GPL-3.0"
 
 [dependencies]
-inotify = "0.4"
+inotify = "0.5.1"

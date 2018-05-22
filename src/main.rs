@@ -27,7 +27,7 @@ use std::process::Command;
 use std::env;
 use inotify::{
     Inotify,
-    watch_mask,
+    WatchMask,
 };
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
         inotify
             .add_watch(
                 arg,
-                watch_mask::ALL_EVENTS
+                WatchMask::ALL_EVENTS
             )
             .expect("Failed to add file watch");
     }
