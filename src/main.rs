@@ -17,24 +17,40 @@
  * along with CanaryWatcher.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+extern crate fuse;
+extern crate libc;
 extern crate inotify;
+extern crate time;
+extern crate procinfo;
 
+use procinfo::pid::stat;
+use time::Timespec;
+use std::ffi::OsStr;
+use std::string::String;
 use std::str::from_utf8;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 use std::process::Command;
 use std::env;
+use libc::ENOENT;
+use fuse::{
+    Filesystem,
+    ReplyDirectory,
+    ReplyEntry,
+    ReplyAttr,
+    ReplyData,
+    Request,
+    FileType,
+    FileAttr,
+};
 use inotify::{
     Inotify,
     WatchMask,
 };
 
-fn main() {
-    println!("Arming...");
-
+fn getLuksVol() -> String {
     let mut luksvol = None;
-
     let dmset = Command::new("/usr/sbin/dmsetup")
                        .arg("ls")
                        .output()
@@ -54,67 +70,149 @@ fn main() {
 
     println!("Using luks volume {:?}", luksvol);
 
+    luksvol
+}
+
+fn doTheLock(luksvol: String) {
+    println!("Locking");
+
+    println!("Enabling sysrq");
+    match File::create(Path::new("/proc/sys/kernel/sysrq")) {
+        Err(e) => {
+            println!("Unable to enable sysrq");
+            Some(false)
+        },
+        Ok(mut file) => {
+            file.write_all("1".as_bytes());
+            Some(true)
+        }
+    };
+
+    println!("Locking file system");
+    Command::new("/usr/sbin/cryptsetup")
+            .arg("luksClose")
+            .arg(luksvol)
+            .output();
+
+    println!("Raising Elephants Is So Utterly Boring");
+    match File::create(Path::new("/proc/sysrq-trigger")) {
+        Err(e) => {
+            println!("Unable to open sysrq-trigger");
+            Some(false)
+        },
+        Ok(mut file) => {
+            file.write_all("b".as_bytes()).expect("Failed");
+            Some(true)
+        }
+    };
+
+    println!("And hard shutdown");
+    Command::new("/usr/sbin/reboot")
+            .arg("--force")
+            .arg("--force")
+            .spawn()
+            .expect("Failed to reboot");
+
+    println!("And we are gone");
+}
+
+fn notify(path: String, luksvol: String) {
     let mut inotify = Inotify::init()
         .expect("Error while initializing inotify instance");
 
-    for arg in env::args().skip(1) {
-        inotify
-            .add_watch(
-                arg,
-                WatchMask::ALL_EVENTS
-            )
-            .expect("Failed to add file watch");
-    }
+    inotify
+        .add_watch(
+            path,
+            WatchMask::ALL_EVENTS
+        )
+        .expect("Failed to add file watch");
 
     let mut buffer = [0; 1024];
-    println!("Armed!");
-
     let events = inotify.read_events_blocking(&mut buffer)
         .expect("Error while reading events");
 
     for event in events {
-        println!("Triggered!");
+        doTheLock(luksvol.to_string());
+    }
+}
 
-        println!("Got event: {:?}", event.name);
+struct LockFS {
+    luksvol: String,
+}
 
-        println!("Enabling sysrq");
-        match File::create(Path::new("/proc/sys/kernel/sysrq")) {
-            Err(e) => {
-                println!("Unable to enable sysrq");
-                Some(false)
-            },
-            Ok(mut file) => {
-                file.write_all("1".as_bytes());
-                Some(true)
+const CREATE_TIME: Timespec = Timespec { sec: 1381237736, nsec: 0};
+
+impl Filesystem for LockFS {
+    fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
+        if ino == 1 {
+            reply.attr(&Timespec{sec: 1, nsec: 0},
+                       &FileAttr{
+                           ino: 1,
+                           size: 0,
+                           blocks: 0,
+                           kind: FileType::Directory,
+                           perm: 0o777,
+                           nlink: 2,
+                           uid: 0,
+                           gid: 0,
+                           rdev: 0,
+                           flags: 0,
+                           atime: CREATE_TIME,
+                           mtime: CREATE_TIME,
+                           crtime: CREATE_TIME,
+                           ctime: CREATE_TIME,
+                       });
+            // Reply
+        } else {
+            reply.error(ENOENT);
+        }
+    }
+
+    fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
+        if ino == 1 {
+            if offset == 0 {
+                reply.add(1, 0, FileType::Directory, ".");
+                reply.add(1, 1, FileType::Directory, "..");
             }
-        };
+            reply.ok();
+        } else {
+            reply.error(ENOENT);
+        }
 
-        println!("Locking file system");
-        Command::new("/usr/sbin/cryptsetup")
-                .arg("luksClose")
-                .arg(luksvol)
-                .output();
+        let procinfo = stat(_req.pid() as i32);
+        println!("Causing proc: {:?}", procinfo);
 
-        println!("Raising Elephants Is So Utterly Boring");
-        match File::create(Path::new("/proc/sysrq-trigger")) {
-            Err(e) => {
-                println!("Unable to open sysrq-trigger");
-                Some(false)
-            },
-            Ok(mut file) => {
-                file.write_all("b".as_bytes()).expect("Failed");
-                Some(true)
-            }
-        };
+        println!("Locking up {:?}", self.luksvol);
 
-        println!("And hard shutdown");
-        Command::new("/usr/sbin/reboot")
-                .arg("--force")
-                .arg("--force")
-                .spawn()
-                .expect("Failed to reboot");
+        doTheLock(self.luksvol.to_string());
+    }
+}
 
-        println!("And we are gone");
+fn fuse(path: String, luksvol: String) {
+    let options = ["fsname=hello"]
+        .iter()
+        .map(|o| o.as_ref())
+        .collect::<Vec<&OsStr>>();
+    fuse::mount(LockFS{luksvol:luksvol}, &path, &options).unwrap();
+}
+
+fn main() {
+    let luksvol = getLuksVol();
+
+    if env::args_os().len() != 3 {
+        panic!("Usage: <program> [notify|fuse] <path>");
         return;
+    }
+
+    let args: Vec<String> = env::args().collect();
+    let option = &args[1];
+    let path = (&args[2]).to_string();
+
+    if option == "notify" {
+        notify(path, luksvol);
+    } else if option == "fuse" {
+        fuse(path, luksvol);
+    } else {
+        panic!("Usage: <program> [notify|fuse] <path>");
     }
 }
