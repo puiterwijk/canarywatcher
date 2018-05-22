@@ -93,7 +93,7 @@ fn main() {
         Command::new("/usr/sbin/cryptsetup")
                 .arg("luksClose")
                 .arg(luksvol)
-                .spawn();
+                .output();
 
         println!("Raising Elephants Is So Utterly Boring");
         match File::create(Path::new("/proc/sysrq-trigger")) {
