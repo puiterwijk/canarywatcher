@@ -189,7 +189,7 @@ impl Filesystem for LockFS {
 }
 
 fn fuse(path: String, luksvol: String) {
-    let options = ["fsname=hello"]
+    let options = ["-o", "allow_other"]
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
