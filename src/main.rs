@@ -19,6 +19,7 @@
 
 extern crate inotify;
 
+use std::str::from_utf8;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
@@ -30,6 +31,29 @@ use inotify::{
 };
 
 fn main() {
+    println!("Arming...");
+
+    let mut luksvol = None;
+
+    let dmset = Command::new("/usr/sbin/dmsetup")
+                       .arg("ls")
+                       .output()
+                       .expect("Failed to get dmset")
+                       .stdout;
+    let dmset = &dmset;
+    let dmset = from_utf8(dmset).expect("Unable to parse string");
+    for val in dmset.split("\n") {
+        let split = val.split("\t").collect::<Vec<&str>>();
+        if split.len() == 2 {
+            if split[0].contains("luks-") {
+                luksvol = Some(split[0].to_string());
+            }
+        }
+    }
+    let luksvol = luksvol.expect("No luks volume found");
+
+    println!("Using luks volume {:?}", luksvol);
+
     let mut inotify = Inotify::init()
         .expect("Error while initializing inotify instance");
 
@@ -43,10 +67,14 @@ fn main() {
     }
 
     let mut buffer = [0; 1024];
+    println!("Armed!");
+
     let events = inotify.read_events_blocking(&mut buffer)
         .expect("Error while reading events");
 
     for event in events {
+        println!("Triggered!");
+
         println!("Got event: {:?}", event.name);
 
         println!("Enabling sysrq");
@@ -64,7 +92,7 @@ fn main() {
         println!("Locking file system");
         Command::new("/usr/sbin/cryptsetup")
                 .arg("luksClose")
-                .arg("luks-f13f0bb2-d2b6-42d3-9b5b-d9f02b8dcb37")
+                .arg(luksvol)
                 .spawn();
 
         println!("Raising Elephants Is So Utterly Boring");
