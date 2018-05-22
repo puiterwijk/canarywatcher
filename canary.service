@@ -1,0 +1,12 @@
+[Unit]
+Description=Canary service
+After=home.mount
+Requires=home.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/canarywatcher fuse /home/someone/mycanary/
+ExecStop=/usr/bin/umount /home/someone/mycanary/
+
+[Install]
+WantedBy=multi-user.target
