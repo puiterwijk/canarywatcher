@@ -5,7 +5,7 @@ Requires=home.mount
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/canarywatcher fuse /home/someone/mycanary/
+ExecStart=/usr/local/bin/canarywatcher arm fuse /home/someone/mycanary/
 ExecStop=/usr/bin/umount /home/someone/mycanary/
 
 [Install]
