@@ -49,6 +49,8 @@ use inotify::{
     WatchMask,
 };
 
+static mut ARMED: bool = false;
+
 fn getLuksVol() -> String {
     let mut luksvol = None;
     let dmset = Command::new("/usr/sbin/dmsetup")
@@ -75,6 +77,16 @@ fn getLuksVol() -> String {
 
 fn doTheLock(luksvol: String) {
     println!("Locking");
+
+    let mut isArmed: bool = false;
+    unsafe {
+        let isArmed = ARMED;
+    }
+
+    if !isArmed {
+        println!("Would've locked");
+        return;
+    }
 
     println!("Enabling sysrq");
     match File::create(Path::new("/proc/sys/kernel/sysrq")) {
@@ -199,14 +211,26 @@ fn fuse(path: String, luksvol: String) {
 fn main() {
     let luksvol = getLuksVol();
 
-    if env::args_os().len() != 3 {
-        panic!("Usage: <program> [notify|fuse] <path>");
+    if env::args_os().len() != 4 {
+        panic!("Usage: <program> [test|arm] [notify|fuse] <path>");
         return;
     }
 
     let args: Vec<String> = env::args().collect();
-    let option = &args[1];
-    let path = (&args[2]).to_string();
+    let armarg = & args[1];
+    let option = &args[2];
+    let path = (&args[3]).to_string();
+
+    if armarg != "test" && armarg != "arm" {
+        panic!("Usage: <program> [test|arm] [notify|fuse] <path>");
+        return;
+    }
+    if armarg != "test" {
+        unsafe {
+            ARMED = true;
+            println!("Arming!");
+        }
+    }
 
     if option == "notify" {
         notify(path, luksvol);
