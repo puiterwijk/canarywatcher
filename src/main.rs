@@ -49,8 +49,6 @@ use inotify::{
     WatchMask,
 };
 
-static mut ARMED: bool = false;
-
 fn getLuksVol() -> String {
     let mut luksvol = None;
     let dmset = Command::new("/usr/sbin/dmsetup")
@@ -75,15 +73,10 @@ fn getLuksVol() -> String {
     luksvol
 }
 
-fn doTheLock(luksvol: String) {
+fn doTheLock(armed: bool, luksvol: String) {
     println!("Locking");
 
-    let mut isArmed: bool = false;
-    unsafe {
-        let isArmed = ARMED;
-    }
-
-    if !isArmed {
+    if !armed {
         println!("Would've locked");
         return;
     }
@@ -128,7 +121,7 @@ fn doTheLock(luksvol: String) {
     println!("And we are gone");
 }
 
-fn notify(path: String, luksvol: String) {
+fn notify(armed: bool, path: String, luksvol: String) {
     let mut inotify = Inotify::init()
         .expect("Error while initializing inotify instance");
 
@@ -144,11 +137,12 @@ fn notify(path: String, luksvol: String) {
         .expect("Error while reading events");
 
     for event in events {
-        doTheLock(luksvol.to_string());
+        doTheLock(armed, luksvol.to_string());
     }
 }
 
 struct LockFS {
+    armed: bool,
     luksvol: String,
 }
 
@@ -196,16 +190,16 @@ impl Filesystem for LockFS {
 
         println!("Locking up {:?}", self.luksvol);
 
-        doTheLock(self.luksvol.to_string());
+        doTheLock(self.armed, self.luksvol.to_string());
     }
 }
 
-fn fuse(path: String, luksvol: String) {
+fn fuse(armed: bool, path: String, luksvol: String) {
     let options = ["-o", "allow_other"]
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    fuse::mount(LockFS{luksvol:luksvol}, &path, &options).unwrap();
+    fuse::mount(LockFS{luksvol:luksvol, armed: armed}, &path, &options).unwrap();
 }
 
 fn main() {
@@ -220,22 +214,20 @@ fn main() {
     let armarg = & args[1];
     let option = &args[2];
     let path = (&args[3]).to_string();
+    let armed = armarg != "test";
 
     if armarg != "test" && armarg != "arm" {
         panic!("Usage: <program> [test|arm] [notify|fuse] <path>");
         return;
     }
-    if armarg != "test" {
-        unsafe {
-            ARMED = true;
-            println!("Arming!");
-        }
+    if armed {
+        println!("Arming!");
     }
 
     if option == "notify" {
-        notify(path, luksvol);
+        notify(armed, path, luksvol);
     } else if option == "fuse" {
-        fuse(path, luksvol);
+        fuse(armed, path, luksvol);
     } else {
         panic!("Usage: <program> [notify|fuse] <path>");
     }
